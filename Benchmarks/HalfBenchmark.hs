@@ -443,7 +443,7 @@ halfbenchmark = [
   (("In meeting hall the French elected corporations treasurer",11), "CHAMBERLAIN"),
   (("US state capital worker is in agreement",10), "CONCORDANT"),
   (("From this mount you might get stake back",4), "ETNA"),
-  (("A widely held but false belief covered in a series of letters from Jeremy Thorpe",4), "MYTH"),
+  --(("A widely held but false belief covered in a series of letters from Jeremy Thorpe",4), "MYTH"),
   (("What a bishop may have on in a joint",5), "MITRE"),
   (("Artist is full of dismay Just the opposite with this valuation",9), "APPRAISAL"),
   (("A couple of rooks  one was unable to fly",4), "DODO"),

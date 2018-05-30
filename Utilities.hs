@@ -26,7 +26,7 @@ noise
   = ["a", "all", "in", "to", "is", "by", "of", "its", "for", "the", "as",
      "out", "from", "was", "has", "be", "being", "let", "put"]
 
-cartesianAppend [xs] 
+cartesianAppend [xs]
   = xs
 cartesianAppend (xs : xss)
   = [x ++ y | x <- xs, y <- cartesianAppend xss]
@@ -45,7 +45,7 @@ lookUp x t
 sameLetters s s'
   = null (s \\ s') && null (s' \\ s)
 
-prefixes 
+prefixes
   = tail . inits
 
 suffixes s
@@ -55,14 +55,14 @@ substrings :: [a] -> [[a]]
 substrings s
   = [i | t <- tails s, i <- tail (inits t)]
 
-partitions' [] 
+partitions' []
   = [[]]
-partitions' (x:xs) 
+partitions' (x:xs)
   = [[x] : p | p <- partitions' xs] ++
     [(x : ys) : yss | (ys : yss) <- partitions' xs]
 
 partitions :: [a] -> [[[a]]]
-partitions 
+partitions
   = init . partitions'
 
 splitOn :: ([a] -> [a] -> Bool) -> [a] -> [a] -> [([a], [a], [a])]
@@ -122,7 +122,7 @@ anagrams' s
 insertInto [] s
   = []
 insertInto s s'
-  = [s1 ++ s ++ s2 | (s1, s2) <- split2 s'] 
+  = [s1 ++ s ++ s2 | (s1, s2) <- split2 s']
 
 subtractFrom :: String -> String -> [String]
 subtractFrom s []
@@ -133,13 +133,13 @@ subtractFrom s s'@(c : s'')
     fail = [c : s''' | s''' <- subtractFrom s s'']
     succeed suffix = suffix : [c : s''' | s''' <- subtractFrom s s'']
 
-firstLetters s 
+firstLetters s
   = tail (inits s)
 
 -- Pre: The list is non-empty
 -- If the text ends with "'s" then take off the "'s"...
 lastLetters :: String -> [String]
-lastLetters s 
+lastLetters s
   | isPossessiveNoun = lastOf s1
   | otherwise        = lastOf s
   where
@@ -153,9 +153,9 @@ removeMiddle s
   | length s < 3 = []
 removeMiddle l@(_ : _ : s)
   = concat (f (prefixes l) (tails s) 1)
-  where 
+  where
     f :: [[a]] -> [[a]] -> Int -> [[[a]]]
-    f ps [] n = [] 
+    f ps [] n = []
     f ps ([] : ts) n = []
     f ps (t : ts) n = [p ++ t | p <- take n ps] : f ps ts (n + 1)
 
@@ -170,10 +170,10 @@ odds []
 odds [x]
   = [x]
 odds (x : x' : xs)
-  = x : odds xs   
+  = x : odds xs
 
 evens (x : x' : xs)
-  = x' : evens xs   
+  = x' : evens xs
 evens xs
   = []
 

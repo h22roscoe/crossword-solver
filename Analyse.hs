@@ -8,7 +8,7 @@ import Benchmarks.Guardian
 import Benchmarks.ClueBank
 
 results = [concatMap (match answer False) ps' |
-  (clue, upAnswer) <- cluebank,
+  (clue, upAnswer) <- cluebank,--halfbenchmark,
   let answer = map toLower upAnswer,
   let ps = getSomeParses clue,
   let ps' = if length ps > 4000 then [] else ps]

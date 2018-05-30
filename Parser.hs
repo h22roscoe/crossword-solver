@@ -14,6 +14,7 @@ import Utilities
 import LengthFunctions
 import Databases
 import Debug.Trace
+import qualified Classify
 
 
 ------------------ CLUE PARSING MECHANICS FUNCTIONS ------------------------
@@ -121,10 +122,11 @@ allParses c@(text, n)
 
 parse :: Condition -> Clue -> StemCache -> [Parse]
 parse cond clue@(s, n) sc
-  = parseWithoutIndicator cond clue ws sc ++
-    parseWithIndicator cond clue ws sc
+  = parseWithoutIndicator cond clue ws sc table ++
+    parseWithIndicator cond clue ws sc table
   where
     ws = words (cleanUp s)
+    table = Classify.makeIndicatorTable ws
 
 checkParses c@(text, n)
   = sortByParseCost (constrainParseLengths n table ps)
@@ -134,27 +136,27 @@ checkParses c@(text, n)
     ps = parse Always c (makeStemCache (substrings (words (cleanUp text))))
     getSingularWords (_, _, _, t) = singularWords t
 
-parseWithoutIndicator :: Condition -> Clue -> ClueText -> StemCache -> [Parse]
-parseWithoutIndicator cond clue ws sc
+parseWithoutIndicator :: Condition -> Clue -> ClueText -> StemCache -> Classify.IndicatorTable -> [Parse]
+parseWithoutIndicator cond clue ws sc table
   = [(clue, ws', [], p) | (ws', ws'') <- split2' ws,
                           checkCondition cond ws',
-                          p <- parseClue ws'' sc]
+                          p <- parseClue ws'' sc table]
 
-parseWithIndicator :: Condition -> Clue -> ClueText -> StemCache -> [Parse]
-parseWithIndicator cond clue ws sc
+parseWithIndicator :: Condition -> Clue -> ClueText -> StemCache -> Classify.IndicatorTable -> [Parse]
+parseWithIndicator cond clue ws sc table
   = [(clue, ws', ws'', p) | (ws', ws'', ws''') <- split3' ws,
                             checkCondition cond ws',
                             defIndicator (get ws'' sc),
-                            p <- parseClue ws''' sc]
+                            p <- parseClue ws''' sc table]
 
 -- Parsing with and without concat happens alternately down the tree: a concat
 -- node cannot have another concat node as a direct descendent
 
-type ClueTypeParser = ClueText -> StemCache -> [ParseTree]
+type ClueTypeParser = ClueText -> StemCache -> Classify.IndicatorTable -> [ParseTree]
 
-parseClue :: ClueText -> StemCache -> [ParseTree]
-parseClue text sc
-  = applyParser text parseAllClueTypes sc
+parseClue :: ClueText -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseClue text sc table
+  = applyParser text table parseAllClueTypes sc
 
 -- WARNING: If you remove abbreviations then anagrams must be able to take
 -- synonyms as arguments, in which case you then need to rewrite synonyms
@@ -165,34 +167,34 @@ parseClue text sc
 -- to the same text. Hence nub...
 -- NOTE: Should ideally work for duplicates, e.g. double gin mixed... but this
 -- version doesn't
-parseTextAbbr :: ClueText -> StemCache -> [ParseTree]
-parseTextAbbr text sc
-  = nub (applyParser text parseTextAbbrOnly sc)
+parseTextAbbr :: ClueText -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseTextAbbr text sc table
+  = nub (applyParser text table parseTextAbbrOnly sc)
   where
     parseTextAbbrOnly :: ClueTypeParser
-    parseTextAbbrOnly text sc
+    parseTextAbbrOnly text sc table
       = parseText text sc ++
         parseAbbreviation text sc
 
 -- For subtexts
 -- Note that this excludes charades completely.
 parseTextSyn :: ClueTypeParser
-parseTextSyn text sc
+parseTextSyn text sc table
   = parseText text sc ++
     parseSynonym text sc ++
-    parseExampleOf text pairs sc
+    parseExampleOf text pairs sc table
   where
     pairs = split2' text
 
 -- partitions returns all subtext partitions; from these we can form all
 -- possible concatenations using sequence (Data.List). For each concatenation
 -- we build a Charade tree.
-applyParser :: ClueText -> ClueTypeParser -> StemCache -> [ParseTree]
-applyParser text parser sc
-  = parser text sc ++ concatMap makeCharades (partitions text)
+applyParser :: ClueText -> Classify.IndicatorTable -> ClueTypeParser -> StemCache -> [ParseTree]
+applyParser text table parser sc
+  = parser text sc table ++ concatMap makeCharades (partitions text)
   where
     makeCharades p = map (buildCharade text)
-                         (sequence (map (\txt -> parser txt sc) p))
+                         (sequence (map (\txt -> parser txt sc table) p))
 
 -- Builds a balanced tree. Each Charade gets a copy of the top-level
 -- text corresponding to the concatenation. This is for the no-indicator
@@ -216,20 +218,20 @@ buildCharade text ts
 -- We only need Text in special cases
 -- Note: The L1-R2 indicators variants mean we need split3, not split3'
 parseAllClueTypes :: ClueTypeParser
-parseAllClueTypes text sc
+parseAllClueTypes text sc table
   = parseSynonym text sc ++
-    parseAnagram text pairs sc ++
-    parseOdds text pairs sc ++
-    parseEvens text pairs sc ++
-    parseDuplicate text pairs sc ++
-    parseSubText text pairs sc ++
-    parseHiddenWord text pairs sc ++
-    parseExampleOf text pairs sc ++
-    parseHomophone text pairs sc ++
-    parseReversal text pairs sc ++
-    parseInsertion text triples sc ++
-    parseSubtraction text triples sc ++
-    parseCharade text triples sc
+    parseAnagram text pairs sc table ++
+    parseOdds text pairs sc table ++
+    parseEvens text pairs sc table ++
+    parseDuplicate text pairs sc table ++
+    parseSubText text pairs sc table ++
+    parseHiddenWord text pairs sc table ++
+    parseExampleOf text pairs sc table ++
+    parseHomophone text pairs sc table ++
+    parseReversal text pairs sc table ++
+    parseInsertion text triples sc table ++
+    parseSubtraction text triples sc table ++
+    parseCharade text triples sc table
   where
     pairs = split2' text
     triples = split3 text
@@ -249,37 +251,37 @@ parseAbbreviation text sc
   where
     s = unwords text
 
-parseAnagram :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseAnagram text pairs sc
+parseAnagram :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseAnagram text pairs sc table
   = [Anagram text ws p | (ws, ws') <- pairs,
-                         anagramInd (get ws sc),
-                         p <- parseTextAbbr ws' sc]
+                         anagramInd (get ws sc) || elem Classify.Anagram (fromJust (lookup ws table)),
+                         p <- parseTextAbbr ws' sc table]
 
-parseOdds :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseOdds text pairs sc
+parseOdds :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseOdds text pairs sc table
   = [Odds text ws ws' | (ws, ws') <- pairs,
-                        oddsInd (get ws sc)]
+                        oddsInd (get ws sc) || elem Classify.Odds (fromJust (lookup ws table))]
 
-parseEvens :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseEvens text pairs sc
+parseEvens :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseEvens text pairs sc table
   = [Evens text ws ws' | (ws, ws') <- pairs,
-                         evensInd (get ws sc)]
+                         evensInd (get ws sc) || elem Classify.Evens (fromJust (lookup ws table))]
 
-parseExampleOf :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseExampleOf text pairs sc
+parseExampleOf :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseExampleOf text pairs sc table
   = [ExampleOf text ws ws' | (ws, ws') <- pairs,
-                             exampleOfInd (get ws sc)]
+                             exampleOfInd (get ws sc) || elem Classify.ExampleOf (fromJust (lookup ws table))]
 
 -- Hidden words must span all of the words and there must be at least two.
 -- Special case: subtexts of reversals have their own constructor.
 -- WARNING: If you try to do this using recursion then you can't
 -- guarantee that the hidden word spans all words in the text.
-parseHiddenWord :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseHiddenWord text pairs sc
+parseHiddenWord :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseHiddenWord text pairs sc table
   = [fromJust t | (ws, ws') <- pairs,
                   length ws' > 1,
-                  hiddenWordInd (get ws sc),
-                  p <- parseClue ws' sc,
+                  hiddenWordInd (get ws sc) || elem Classify.HiddenWord (fromJust (lookup ws table)),
+                  p <- parseClue ws' sc table,
                   let t = makeHiddenWord ws p,
                   isJust t]
   where
@@ -295,60 +297,60 @@ parseHiddenWord text pairs sc
 
 -- We split the cases so that we can get different cost functions: the second
 -- case is quite rare and can be expensive.
-parseSubText :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseSubText text pairs sc
+parseSubText :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseSubText text pairs sc table
   = [SubText text ws p | (ws, ws') <- pairs,
-                         subTextInd (get ws sc),
-                         p <- parseTextSyn ws' sc]
+                         subTextInd (get ws sc) || elem Classify.Subtext (fromJust (lookup ws table)),
+                         p <- parseTextSyn ws' sc table]
 
 -- The extra argument is the singular version of ws'. There are two
 -- of these because in general there may be a different synonym instance
 -- for each and we need the results for the explanation.
-parseDuplicate :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseDuplicate text pairs sc
+parseDuplicate :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseDuplicate text pairs sc table
   = [Duplicate text s s ws ws' | (ws, ws') <- pairs,
-                                 duplicateInd (get ws sc),
+                                 duplicateInd (get ws sc) || elem Classify.Duplicate (fromJust (lookup ws table)),
                                  let s = makeSingular ws']
 
-parseHomophone :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseHomophone text pairs sc
+parseHomophone :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseHomophone text pairs sc table
   = [Homophone text ws (Synonym ws') | (ws, ws') <- pairs,
-                                       homophoneInd (get ws sc)]
+                                       homophoneInd (get ws sc) || elem Classify.Homophone (fromJust (lookup ws table))]
 
-parseReversal :: ClueText -> Pairs -> StemCache -> [ParseTree]
-parseReversal text pairs sc
+parseReversal :: ClueText -> Pairs -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseReversal text pairs sc table
   = [Reversal text ws p | (ws, ws') <- pairs,
-                          reversalInd (get ws sc),
-                          p <- parseClue ws' sc]
+                          reversalInd (get ws sc) || elem Classify.Reversal (fromJust (lookup ws table)),
+                          p <- parseClue ws' sc table]
 
 -- This uses the L1-R2 indicator variants. It's probably worth separating
 -- these out as the indicators are sometimes quite different from one another.
-parseInsertion :: ClueText -> Triples -> StemCache -> [ParseTree]
-parseInsertion text triples sc
+parseInsertion :: ClueText -> Triples -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseInsertion text triples sc table
   = [Insertion text ws p' p'' | (ws, ws', ws'') <- triples,
-                                insertionIndL1 (get ws sc),
-                                p' <- parseClue ws' sc,
-                                p'' <- parseClue ws'' sc] ++
+                                insertionIndL1 (get ws sc) || elem Classify.Insertion (fromJust (lookup ws table)),
+                                p' <- parseClue ws' sc table,
+                                p'' <- parseClue ws'' sc table] ++
     [Insertion text ws p' p'' | (ws, ws'', ws') <- triples,
-                                insertionIndL2 (get ws sc),
-                                p' <- parseClue ws' sc,
-                                p'' <- parseClue ws'' sc] ++
+                                insertionIndL2 (get ws sc) || elem Classify.Insertion (fromJust (lookup ws table)),
+                                p' <- parseClue ws' sc table,
+                                p'' <- parseClue ws'' sc table] ++
     [Insertion text ws p' p'' | (ws', ws, ws'') <- triples,
-                                insertionIndC1 (get ws sc),
-                                p' <- parseClue ws' sc,
-                                p'' <- parseClue ws'' sc] ++
+                                insertionIndC1 (get ws sc) || elem Classify.Insertion (fromJust (lookup ws table)),
+                                p' <- parseClue ws' sc table,
+                                p'' <- parseClue ws'' sc table] ++
     [Insertion text ws p' p'' | (ws'', ws, ws') <- triples,
-                                insertionIndC2 (get ws sc),
-                                p' <- parseClue ws' sc,
-                                p'' <- parseClue ws'' sc] ++
+                                insertionIndC2 (get ws sc) || elem Classify.Insertion (fromJust (lookup ws table)),
+                                p' <- parseClue ws' sc table,
+                                p'' <- parseClue ws'' sc table] ++
     [Insertion text ws p' p'' | (ws', ws'', ws) <- triples,
-                                insertionIndR1 (get ws sc),
-                                p' <- parseClue ws' sc,
-                                p'' <- parseClue ws'' sc] ++
+                                insertionIndR1 (get ws sc) || elem Classify.Insertion (fromJust (lookup ws table)),
+                                p' <- parseClue ws' sc table,
+                                p'' <- parseClue ws'' sc table] ++
     [Insertion text ws p' p'' | (ws'', ws', ws) <- triples,
-                                insertionIndR2 (get ws sc),
-                                p' <- parseClue ws' sc,
-                                p'' <- parseClue ws'' sc]
+                                insertionIndR2 (get ws sc) || elem Classify.Insertion (fromJust (lookup ws table)),
+                                p' <- parseClue ws' sc table,
+                                p'' <- parseClue ws'' sc table]
 
 -- TO DO: Remove anagrams from the arguments. Nobody would ever do this and
 -- they can be expensive, e.g. ("instrument made from two circles", 5)
@@ -356,62 +358,62 @@ parseInsertion text triples sc
 -- ["instrument","made","from","two"] ["from"] (Synonym ["two"]) (Anagram
 -- ["instrument","made"] ["made"] (Text ["instrument"])))
 
-parseSubtraction :: ClueText -> Triples -> StemCache -> [ParseTree]
-parseSubtraction text triples sc
+parseSubtraction :: ClueText -> Triples -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseSubtraction text triples sc table
   = [Subtraction text ws p' p'' | (ws, ws', ws'') <- triples,
-                              subtractionIndL1 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              subtractionIndL1 (get ws sc) || elem Classify.Subtraction (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Subtraction text ws p' p'' | (ws, ws'', ws') <- triples,
-                              subtractionIndL2 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              subtractionIndL2 (get ws sc) || elem Classify.Subtraction (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Subtraction text ws p' p'' | (ws', ws, ws'') <- triples,
-                              subtractionIndC1 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              subtractionIndC1 (get ws sc) || elem Classify.Subtraction (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Subtraction text ws p' p'' | (ws'', ws, ws') <- triples,
-                              subtractionIndC2 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              subtractionIndC2 (get ws sc) || elem Classify.Subtraction (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Subtraction text ws p' p'' | (ws', ws'', ws) <- triples,
-                              subtractionIndR1 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              subtractionIndR1 (get ws sc) || elem Classify.Subtraction (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Subtraction text ws p' p'' | (ws'', ws', ws) <- triples,
-                              subtractionIndR2 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc]
+                              subtractionIndR2 (get ws sc) || elem Classify.Subtraction (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table]
 
 
 -- This uses the L1-R2 indicator variants. It's probably worth separating
 -- these out as the indicators are sometimes quite different from one another.
-parseCharade :: ClueText -> Triples -> StemCache -> [ParseTree]
-parseCharade text triples sc
+parseCharade :: ClueText -> Triples -> StemCache -> Classify.IndicatorTable -> [ParseTree]
+parseCharade text triples sc table
   = [Charade text ws p' p'' | (ws, ws', ws'') <- triples,
-                              charadeIndL1 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              charadeIndL1 (get ws sc) || elem Classify.Charade (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Charade text ws p' p'' | (ws, ws'', ws') <- triples,
-                              charadeIndL2 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              charadeIndL2 (get ws sc) || elem Classify.Charade (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Charade text ws p' p'' | (ws', ws, ws'') <- triples,
-                              charadeIndC1 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              charadeIndC1 (get ws sc) || elem Classify.Charade (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Charade text ws p' p'' | (ws'', ws, ws') <- triples,
-                              charadeIndC2 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              charadeIndC2 (get ws sc) || elem Classify.Charade (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Charade text ws p' p'' | (ws', ws'', ws) <- triples,
-                              charadeIndR1 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc] ++
+                              charadeIndR1 (get ws sc) || elem Classify.Charade (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table] ++
     [Charade text ws p' p'' | (ws'', ws', ws) <- triples,
-                              charadeIndR2 (get ws sc),
-                              p' <- parseClue ws' sc,
-                              p'' <- parseClue ws'' sc]
+                              charadeIndR2 (get ws sc) || elem Classify.Charade (fromJust (lookup ws table)),
+                              p' <- parseClue ws' sc table,
+                              p'' <- parseClue ws'' sc table]
 
 
 -------------- COST EVALUATION -------------

@@ -6,19 +6,19 @@ import Data.List
 import Stemmer
 import Debug.Trace
 
--- Stemmed noise comprises words that can safely be removed before checking for 
+-- Stemmed noise comprises words that can safely be removed before checking for
 -- key indicator words.
 -- Stemmed Ind1 words are *single* words (stemmed) that can be taken as
--- indicators in their own right, but that might also qualify a second word or 
+-- indicators in their own right, but that might also qualify a second word or
 -- phrase, e.g. changing shape. Here "change" is an Ind1 word and "shape" an
 -- Ind2 word.
 
 -- WARNING: This can massively increase the number of parses if you're not
--- careful. It is very easy for common words, e.g. "to" to end up being 
+-- careful. It is very easy for common words, e.g. "to" to end up being
 -- recognised as an indicator.
 -- You must remember that Ind1 words get stripped from the Ind2 words, so it's
 -- easy for, e.g. "to make" to become "to" if "make" is in Ind1.
--- Short plurals, e.g. "cars" get stemmed to "car" and is confused with "care", 
+-- Short plurals, e.g. "cars" get stemmed to "car" and is confused with "care",
 -- "caring" etc.
 -- HACK: "cars" is a special case in the Stemmer.
 
@@ -54,7 +54,7 @@ defNoiseStemmed
 defInd1Stemmed
   = stemAll defInd1
 defInd2Stemmed
-  = thin defNoiseStemmed defInd1Stemmed defInd2 
+  = thin defNoiseStemmed defInd1Stemmed defInd2
 
 anagramNoiseStemmed
   = stemAll anagramNoise
@@ -203,15 +203,15 @@ allInds
      evensInd, removeMiddleInd, removeEndsInd, subTextInd, hiddenWordInd,
      duplicateInd, homophoneInd, exampleOfInd, reversalInd, insertionIndL1,
      insertionIndL2, insertionIndC1, insertionIndC2, insertionIndR1, insertionIndR2,
-     subtractionIndL1, subtractionIndL2, subtractionIndC1, subtractionIndC2, 
-     subtractionIndR1, subtractionIndR2, charadeIndL1, charadeIndL2, 
+     subtractionIndL1, subtractionIndL2, subtractionIndC1, subtractionIndC2,
+     subtractionIndR1, subtractionIndR2, charadeIndL1, charadeIndL2,
      charadeIndC1, charadeIndC2, charadeIndR1, charadeIndR2]
 
-defIndicator 
-  = isIndicator defNoiseStemmed defInd1Stemmed defInd2Stemmed 
+defIndicator
+  = isIndicator defNoiseStemmed defInd1Stemmed defInd2Stemmed
 
-anagramInd  
-  = isIndicator anagramNoiseStemmed anagramInd1Stemmed anagramInd2Stemmed 
+anagramInd
+  = isIndicator anagramNoiseStemmed anagramInd1Stemmed anagramInd2Stemmed
 
 firstLettersInd
   = isIndicator firstLettersNoiseStemmed firstLettersInd1Stemmed firstLettersInd2Stemmed
@@ -287,4 +287,3 @@ charadeIndR1
   = isIndicator charadeNoiseStemmed charadeInd1Stemmed charadeInd2R1Stemmed
 charadeIndR2
   = isIndicator charadeNoiseStemmed charadeInd1Stemmed charadeInd2R2Stemmed
-
