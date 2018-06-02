@@ -7,19 +7,40 @@ import Benchmarks.HalfBenchmark
 import Benchmarks.Guardian
 import Benchmarks.ClueBank
 
-results = [concatMap (match answer False) ps' |
+newResults = [earlyFinishMap (match answer False) ps' | -- Exploit laziness and dont go beyond first solve
   (clue, upAnswer) <- cluebank,--halfbenchmark,
   let answer = map toLower upAnswer,
   let ps = getSomeParses clue,
   let ps' = if length ps > 4000 then [] else ps]
 
-solved = filter (not . null) Analyse.results
+oldResults = [earlyFinishMap (match answer False) ps' | -- Exploit laziness and dont go beyond first solve
+  (clue, upAnswer) <- cluebank,--halfbenchmark,
+  let answer = map toLower upAnswer,
+  let ps = getSomeParsesOld clue,
+  let ps' = if length ps > 4000 then [] else ps]
 
-allHelper f = filter (\l -> any f l) solved
+solved results = filter (not . null) results
 
-alls = map allHelper [anagram, odds, evens, exampleOf, hiddenWord, reverseHiddenWord, duplicate, subtext, homophone, reversal, insertion, subtraction, charade]
+allHelper results f = filter (\l -> any f l) (solved results)
 
-lens = zip ["Anagrams", "Odds", "Evens", "Eg of", "Hidden", "Rev hidden", "Duplicate", "Subtext", "Homophone", "Reversal", "Insertion", "Subtraction", "Charade"] (map length alls)
+alls results = map (allHelper results) [anagram, odds, evens, exampleOf, hiddenWord, reverseHiddenWord, duplicate, subtext, homophone, reversal, insertion, subtraction, charade]
+
+lens results = zip ["Anagrams", "Odds", "Evens", "Eg of", "Hidden", "Rev hidden", "Duplicate", "Subtext", "Homophone", "Reversal", "Insertion", "Subtraction", "Charade"] (map length (alls results))
+
+newSolved = solved newResults
+
+oldSolved = solved oldResults
+
+improvements = diffs newSolved oldSolved
+
+diffs rsn rso
+  = [(idx, ans) | (idx, ans) <- new, notIn idx old]
+  where idxn = zip [0 ..] rsn
+        idxo = zip [0 ..] rso
+        new  = filter (not . null . snd) idxn
+        old  = filter (not . null . snd) idxo
+        notIn idx [] = True
+        notIn idx ((i, _) : xs) = if idx == i then False else notIn idx xs
 
 flatten :: AnswerTree -> [AnswerTree]
 flatten x@(SubText' s s' at) = x : flatten at

@@ -15,7 +15,8 @@ import Types
 import Databases
 import LengthFunctions
 import qualified Evaluation
-import Parser
+import qualified Parser as P
+import qualified OldParser as OldP
 import qualified Stemmer
 import Benchmarks.Everyman
 import Benchmarks.Guardian
@@ -160,23 +161,33 @@ gatherLetters (Abbreviation ct) = abbreviations $ filter (not . isSpace) (concat
 gatherLetters (Charade ws ind t t') = [l ++ r | l <- gatherLetters t, r <- gatherLetters t']
 gatherLetters _ = error "Shouldn't be here"
 
+earlyFinishMap f []
+  = []
+earlyFinishMap f (x : xs)
+  = if (not . null) d then d else earlyFinishMap f xs
+  where d = f x
+
 getAllParses :: Clue -> [ParseTree]
 getAllParses c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = allParses c
+  where (ps, _) = P.allParses c
 
 getMostParses :: Clue -> [ParseTree]
 getMostParses c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = parsesWithoutSynonymLengths Always c
+  where (ps, _) = P.parsesWithoutSynonymLengths Always c
 
 getSomeParses :: Clue -> [ParseTree]
 getSomeParses c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = parses Always c
+  where (ps, _) = P.parses Always c
+
+getSomeParsesOld :: Clue -> [ParseTree]
+getSomeParsesOld c = map (\(_,_,_,t) -> t) ps
+  where (ps, _) = OldP.parses Always c
 
 testClue :: Clue -> String -> Bool -> Either [[(String, String)]] [AnswerTree]
 testClue clue ans b
   = if b then Left (listSynonymsToGet work) else Right work
   where lans = map toLower ans
-        work = concatMap (match lans b) $ getMostParses clue
+        work = earlyFinishMap (match lans b) $ getMostParses clue
 
 results = [(clue, answer, concatMap (match answer False) ps) |
   (clue, upAnswer) <- everyman,

@@ -12,6 +12,25 @@ model = load_model('./data/model.h5')
 model._make_predict_function()
 graph = tf.get_default_graph()
 
+@app.route('/<word>')
+def get_vec(word):
+    vec = None
+    word = word.lower()
+    word2 = None
+    if len(word.split()) > 1:
+        word = max(word.split(), key = len)
+        word2 = '_'.join(word.split())
+
+    if word2 and word2 in cn_model.wv.vocab:
+        vec = cn_model.wv[word2]
+    elif word in cn_model.wv.vocab:
+        vec = cn_model.wv[word]
+
+    if vec is not None:
+        return jsonify(vec.tolist())
+    else:
+        return jsonify(None)
+
 @app.route('/classify/<word>')
 def classify(word):
     input = None
