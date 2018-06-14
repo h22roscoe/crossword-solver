@@ -33,20 +33,21 @@ solve c
   where
     (ps, table) = parses Always c
 
-diffSolve c
-  = [concat [L.match ans False t | ans <- lookUp def defs] | (_, def, ind, t) <- ps]
+backSolve c
+  = [concat [L.match ans False st t | ans <- lookUp def defs] | (_, def, ind, t) <- ps']
   where
-    (ps, _) = parsesWithoutSynonymLengths Always c
+    (ps, st) = parses None c
+    ps' = take 1000 ps
     defs = getUniqueDefs c
 
 getUniqueDefs c
-  = [(d, filter ((== l) . length) (syns d)) | d <- defs, isSuffixOf d ct || isPrefixOf d ct]
+  = [(d, filter ((== l) . length) (syns d)) | d <- defs]
   where
-    syns d  = synonyms (unwords d) ++ query [MeansLike d]
-    ct      = words $ cleanUp (fst c)
-    l       = snd c
-    (ps, _) = parses Always c
-    defs    = nub [d | (_, d, _, _) <- ps]
+    syns d     = synonyms (unwords d) ++ query [MeansLike d]
+    ct         = words $ cleanUp (fst c)
+    l          = snd c
+    defs       = nub [def | def <- substrings ct, end def ct, length def < 4]
+    end def ct = isSuffixOf def ct || isPrefixOf def ct
 
 solveAll c
   = displayAllSols c (filterSols table True (evaluate table ps) Nothing)

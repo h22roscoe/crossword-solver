@@ -9,6 +9,7 @@ cn_model = KeyedVectors.load_word2vec_format(
     './data/numberbatch-en.txt', binary = False)
 app = Flask(__name__)
 model = load_model('./data/model.h5')
+# model = load_model('./data/weights.0.14.h5')
 model._make_predict_function()
 graph = tf.get_default_graph()
 

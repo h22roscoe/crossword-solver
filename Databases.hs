@@ -56,10 +56,12 @@ directSynonyms s
     abbreviations s ++
     lookUp s manualSynonyms ++
     lookUp s nameSynonyms ++
-    thesaurusSynonyms s
+    thesaurusSynonyms s ++
+    if l == 2 || l == 3 then query [MeansLike (words s)] else []
   where
-    s' = cleanUp s
+    s'  = cleanUp s
     s'' = filter (not . isSpace) s
+    l   = length (words s)
 
 thesaurusSynonyms s
     = map (map toLower) (filter (not . null) (thesaurusLookup s))
@@ -75,6 +77,8 @@ thesaurusLookup w
 
 -- Synonym table - used to speed up length functions.
 -- Caches synonyms sorted by length and then alphabetically.
+-- extraText is needed for duplicates because they are made singular
+-- so we need to check for the singular synonyms too
 makeSynonymTable :: String -> [ClueText] -> SynonymTable
 makeSynonymTable clueText extraText
   = [(w, (makeSynArray sortedSyns mn mx)) |

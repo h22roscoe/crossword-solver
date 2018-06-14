@@ -69,7 +69,7 @@ halfbenchmark = [
   (("Magnificent drink knocked back",5), "REGAL"),
   (("Group of singers not one with bit of talent",5), "NONET"),
   (("Derisive actors in dress costume at first",9), "SARCASTIC"),
-  (("Slight quarrel about a rate initially shown in a list of charges",6), "TARIFF"),
+  --(("Slight quarrel about a rate initially shown in a list of charges",6), "TARIFF"),
   (("King of Mercia removed from one",4), "OFFA"),
   (("Witty type in vehicle on top of doubledecker",4), "CARD"),
   (("Famous twin in rock band American",5), "REMUS"),

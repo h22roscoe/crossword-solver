@@ -9,6 +9,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Maybe
 import Data.String.Utils
+import Data.List
 import System.IO.Unsafe
 import Types (ClueText)
 import qualified Data.Set as Set
@@ -36,9 +37,7 @@ baseURL = "http://127.0.0.1:5000/classify/"
 
 cutoff :: [Double] -> [Indicator]
 cutoff vals
-  = map fst $ filter snd $ zip inds $ zipWith (\v c -> v > c) vals cutoffs
-  where cutoffs = repeat 10.0
-        inds    = enumFrom (toEnum 0) :: [Indicator]
+  = [ind | (ind, g) <- zip [Anagram ..] (map (> 10.0) vals), g]
 
 classifyHelp :: String -> IO (Maybe [Indicator])
 classifyHelp ind
@@ -58,5 +57,7 @@ classify ind
 
 makeIndicatorTable :: ClueText -> IndicatorTable
 makeIndicatorTable ct
-  = map (\w -> (words w, if length (words w) < 5 then classify w else [])) allWs
-  where allWs = Set.elems $ Set.fromList $ concatMap (map unwords) (partitions ct)
+  = map classifySmall subs
+  where subs = nub $ (substrings ct) \\ [ct]
+        classifySmall ws
+          = (ws, if length ws < 4 then classify (unwords ws) else [])

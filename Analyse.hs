@@ -7,17 +7,17 @@ import Benchmarks.HalfBenchmark
 import Benchmarks.Guardian
 import Benchmarks.ClueBank
 
-newResults = [earlyFinishMap (match answer False) ps' | -- Exploit laziness and dont go beyond first solve
+newResults = [earlyFinishMap (match answer False st) ps' | -- Exploit laziness and dont go beyond first solve
   (clue, upAnswer) <- cluebank,--halfbenchmark,
   let answer = map toLower upAnswer,
-  let ps = getSomeParses clue,
-  let ps' = if length ps > 4000 then [] else ps]
+  let (st, ps) = getSomeParses clue,
+  let ps' = take 1000 ps]
 
-oldResults = [earlyFinishMap (match answer False) ps' | -- Exploit laziness and dont go beyond first solve
+oldResults = [earlyFinishMap (match answer False st) ps' | -- Exploit laziness and dont go beyond first solve
   (clue, upAnswer) <- cluebank,--halfbenchmark,
   let answer = map toLower upAnswer,
-  let ps = getSomeParsesOld clue,
-  let ps' = if length ps > 4000 then [] else ps]
+  let (st, ps) = getSomeParsesOld clue,
+  let ps' = take 500 ps]
 
 solved results = filter (not . null) results
 
@@ -31,7 +31,7 @@ newSolved = solved newResults
 
 oldSolved = solved oldResults
 
-improvements = diffs newSolved oldSolved
+improvements = diffs newResults oldResults
 
 diffs rsn rso
   = [(idx, ans) | (idx, ans) <- new, notIn idx old]
@@ -47,7 +47,7 @@ flatten x@(SubText' s s' at) = x : flatten at
 flatten x@(Homophone' s at) = x : flatten at
 flatten x@(Reversal' s at) = x : flatten at
 flatten x@(Insertion' s at1 at2) = x : (flatten at1 ++ flatten at2)
-flatten x@(Subtraction' s at1 at2) = x : (flatten at1 ++ flatten at2)
+-- flatten x@(Subtraction' s at1 at2) = x : (flatten at1 ++ flatten at2)
 flatten x@(Charade' s at1 at2) = x : (flatten at1 ++ flatten at2)
 flatten at = [at]
 
@@ -57,7 +57,7 @@ helper f at = any f $ flatten at
 anagram
   = helper anagramHelp
   where
-    anagramHelp (Anagram' _) = True
+    anagramHelp (Anagram' _ _) = True
     anagramHelp _ = False
 
 odds
@@ -123,7 +123,8 @@ insertion
 subtraction
   = helper subtractionHelp
   where
-    subtractionHelp (Subtraction' _ _ _) = True
+    subtractionHelp (Subtraction' _) = True
+    -- subtractionHelp (Subtraction' _ _ _) = True
     subtractionHelp _ = False
 
 charade

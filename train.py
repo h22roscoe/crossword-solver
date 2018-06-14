@@ -87,19 +87,19 @@ class SampleEachSequence(keras.utils.Sequence):
         return np.asarray(x_batch), keras.utils.to_categorical(np.asarray(y_batch), num_classes = 13)
 
 def plot_pca(inputs, labels, title):
-    pca = PCA(n_components = 3)
+    pca = PCA(n_components = 2)
     principal_components = pca.fit_transform(inputs)
     print("Explained variance ratio:", pca.explained_variance_ratio_)
-    principal_df = pd.DataFrame(data = principal_components, columns = ['PC1', 'PC2', 'PC3'])
+    principal_df = pd.DataFrame(data = principal_components, columns = ['PC1', 'PC2'])
     labels_df = pd.Series(labels, name = 'target')
 
     final_df = pd.concat([principal_df, labels_df], axis = 1)
 
     fig = plt.figure(figsize = (8, 8))
-    ax = fig.add_subplot(111, projection = '3d')
+    ax = fig.add_subplot(111)
     ax.set_xlabel('Principal Component 1', fontsize = 15)
     ax.set_ylabel('Principal Component 2', fontsize = 15)
-    ax.set_ylabel('Principal Component 3', fontsize = 15)
+    # ax.set_zlabel('Principal Component 3', fontsize = 15)
 
     ax.set_title(title, fontsize = 20)
     targets = types
@@ -108,7 +108,7 @@ def plot_pca(inputs, labels, title):
         indices_to_keep = final_df['target'] == types_map[target]
         ax.scatter(final_df.loc[indices_to_keep, 'PC1'],
                    final_df.loc[indices_to_keep, 'PC2'],
-                   final_df.loc[indices_to_keep, 'PC3'],
+                   # final_df.loc[indices_to_keep, 'PC3'],
                    c = color,
                    s = 50)
     ax.legend(targets)
@@ -152,28 +152,37 @@ inputs, labels, ws = get_data(train_inds)
 #               loss = 'categorical_crossentropy',
 #               metrics = ['accuracy'])
 
-model = load_model('./data/model.h5')
+model = load_model('./data/weights.0.14.h5')
 
-cb = keras.callbacks.ModelCheckpoint('./data/weights.{loss:.2f}.h5', monitor = 'loss', save_best_only = True)
+# cb = keras.callbacks.ModelCheckpoint('./data/weights.{loss:.2f}.h5', monitor = 'loss', save_best_only = True)
 
 model.summary()
 
-# model.fit_generator(SampleEachSequence(inputs, labels, ws), epochs = 10, callbacks = [cb])
+# model.fit_generator(SampleEachSequence(inputs, labels, ws), epochs = 1, callbacks = [cb])
 
 test_inputs, test_labels, test_ws = get_data(test_inds)
 
 ans = model.predict(np.asarray(test_inputs))
 
-all = get_all(inputs, labels, ws)
-for ls in all:
-    random.shuffle(ls)
-cut_off_all = sum(list(map(lambda ls: ls[:8], all)), [])
-inputs, labels, _ = zip(*cut_off_all)
-plot_pca(inputs, labels, 'word2vec Input PCA')
+successes = 0
+total = 0
+for a, label in zip(list(ans), test_labels):
+    if a[label] > 0.1:
+        successes += 1
+    total += 1
 
-new_model = Model(model.inputs, model.layers[-2].output)
-new_model.summary()
-results = new_model.predict(np.asarray(inputs))
-plot_pca(results, labels, 'Latent vector space (output PCA)')
+print(successes / total)
+
+# all = get_all(inputs, labels, ws)
+# for ls in all:
+#     random.shuffle(ls)
+# cut_off_all = sum(list(map(lambda ls: ls[:8], all)), [])
+# inputs, labels, _ = zip(*cut_off_all)
+# plot_pca(inputs, labels, 'Input vector space in 2D')
+#
+# new_model = Model(model.inputs, model.layers[-2].output)
+# new_model.summary()
+# results = new_model.predict(np.asarray(inputs))
+# plot_pca(results, labels, 'Latent vector space in 2D')
 
 #model.save('./data/model.h5')

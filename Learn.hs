@@ -7,6 +7,7 @@ import Data.Binary
 import Data.List
 import Data.List.Extra
 import Data.Maybe
+import Data.Array.IArray
 import qualified Data.Set as Set
 
 import Utilities
@@ -14,6 +15,7 @@ import IndicatorPredicates
 import Types
 import Databases
 import LengthFunctions
+import Constraints
 import qualified Evaluation
 import qualified Parser as P
 import qualified OldParser as OldP
@@ -24,9 +26,9 @@ import Data.Either
 
 data AnswerTree = Text' String |
                 Abbreviation' String |
-                Synonym' String |
+                Synonym' String String |
                 SynonymNeeded' String String |
-                Anagram' String |
+                Anagram' String AnswerTree |
                 Odds' String |
                 Evens' String |
                 ExampleOf' String |
@@ -37,53 +39,61 @@ data AnswerTree = Text' String |
                 Homophone' String AnswerTree |
                 Reversal' String AnswerTree |
                 Insertion' String AnswerTree AnswerTree |
-                Subtraction' String AnswerTree AnswerTree |
+                Subtraction' String |
                 Charade' String AnswerTree AnswerTree
               deriving (Eq, Ord, Show)
 
+index' :: Int -> Array Int [String] -> [String]
+index' i table
+  = if i < mn || i > mx then [] else table ! i
+  where (mn, mx) = bounds table
+
 -- The bool tells us whether we should look for new synonyms or not
-match :: String -> Bool -> ParseTree -> [AnswerTree]
-match s b (Text t)
+match :: String -> Bool -> SynonymTable -> ParseTree -> [AnswerTree]
+match s b st (Text t)
   | s == letters = [Text' s]
   | otherwise    = []
   where letters = filter (not . isSpace) (concat t)
-match s b (Abbreviation a)
+match s b st (Abbreviation a)
   | elem s (abbreviations letters) = [Abbreviation' letters]
   | otherwise                      = []
   where letters = unwords a
-match s b (Synonym s')
-  | syncond   = [Synonym' letters]
+match s b st (Synonym s')
+  | syncond   = [Synonym' s letters]
   | othercond = [SynonymNeeded' s letters]
   | otherwise = []
   where letters   = unwords s'
-        syncond   = elem s (synonyms letters)
+        syncond   = elem s (index' (length s) (fromMaybe (error s) (lookup s' st)))
         othercond = b && isInWordlist s
-match s b (Anagram ws ind t)
-  | any (sameLetters s) (gatherLetters t) = [Anagram' s]
-  | otherwise                             = []
-match s b (Odds ws ind op)
+match s b st (Anagram ws ind t)
+  | any (sameLetters s) letters = [Anagram' s at]
+  | otherwise                   = []
+  where (letters, at) = gatherLetters t
+match s b st (Odds ws ind op)
   | s == odds letters = [Odds' s]
   | otherwise         = []
   where letters = filter (not . isSpace) (concat op)
-match s b (Evens ws ind op)
+match s b st (Evens ws ind op)
   | s == evens letters = [Evens' s]
   | otherwise          = []
   where letters = filter (not . isSpace) (concat op)
-match s b (ExampleOf ws ind op)
-  = match s b (Synonym op) -- TODO check this
-match s b (HiddenWord ws ind op)
+match s b st (ExampleOf ws ind op)
+  = match s b st (Synonym op) -- TODO check this
+match s b st (HiddenWord ws ind op)
   | elem s (substrings letters) = [HiddenWord' s]
   | otherwise                   = []
   where letters = filter (not . isSpace) (concat op)
-match s b (ReversedHiddenWord ws ws' ind ind' op)
+match s b st (ReversedHiddenWord ws ws' ind ind' op)
   | (not . null) recurse = [ReversedHiddenWord' s]
   | otherwise            = []
   where reversed = map reverse (reverse op)
-        recurse  = match s b (HiddenWord ws ind reversed)
-match s b (SubText ws ind (Text txt))
-  = if isJust subtextType then matchSubtext s b (fromJust subtextType) txt else []
+        recurse  = match s b st (HiddenWord ws ind reversed)
+match s b st (SubText ws ind (Text txt))
+  = matchSubtext s b FirstLetters txt ++
+    matchSubtext s b LastLetters txt ++
+    matchSubtext s b RemoveMiddle txt ++
+    matchSubtext s b RemoveEnds txt
   where
-    subtextType = subtextInd ind
     matchSubtext str bool FirstLetters text
       | elem str things = [SubText' FirstLetters str (Text' str)]
       | otherwise       = []
@@ -104,34 +114,38 @@ match s b (SubText ws ind (Text txt))
       | elem str things = [SubText' RemoveEnds str (Text' str)]
       | otherwise       = []
       where things = concatMap removeEnds text
-match s b (SubText ws ind t)
+match s b st (SubText ws ind t)
   = []
-match s b (Duplicate ws ws' ws'' ind op)
+match s b st (Duplicate ws ws' ws'' ind op)
   | s == double = [Duplicate' s]
   | otherwise   = []
   where letters = filter (not . isSpace) (concat op)
         double  = letters ++ letters
-match s b (Homophone ws ind t)
-  = [Homophone' s recurse | recurse <- concat [match x b t | x <- (s : (homophones s))]]
-match s b (Reversal ws ind t)
-  = [Reversal' s recurse | recurse <- match (reverse s) b t]
-match s b (Insertion ws ind t t')
+match s b st (Homophone ws ind t)
+  = [Homophone' s recurse | recurse <- concat [match x b st t | x <- homophones s]]
+match s b st (Reversal ws ind t)
+  = [Reversal' s recurse | recurse <- match (reverse s) b st t]
+match s b st (Insertion ws ind t t')
   = [Insertion' s m m' |
       (s1, s2, s3) <- split3 s,
-      m  <- match s2 b t,
-      m' <- match (s1 ++ s3) b t']
-match s b (Subtraction ws ind t t')
-  = []{-}= [Subtraction' s m m' |
+      m  <- match s2 b st t,
+      m' <- match (s1 ++ s3) b st t']
+match s b st tree@(Subtraction ws ind t t')
+  = []{-if elem s (map getResult results) then [Subtraction' s] else []
+  where results = Evaluation.evalTree st tree constraints True
+        constraints = Constraints Nothing (Just n) (Just n)
+        n = length s -}
+    {-}= [Subtraction' s m m' |
       (s1, s2) <- split2 s ++ [("", s), (s, "")],
       si <- filter (\w -> isPrefixOf s1 w && isSuffixOf s2 w) (Set.toList allWords),
       let mid = fromJust $ stripSuffix s2 (fromJust (stripPrefix s1 si)),
-      m  <- match mid b t,
-      m' <- match si b t']-}
-match s b (Charade ws ind t t')
+      m  <- match mid b st t,
+      m' <- match si b st t']-}
+match s b st (Charade ws ind t t')
   = [Charade' s m m' |
       (l, r) <- split2 s,
-      m  <- match l b t,
-      m' <- match r b t']
+      m  <- match l b st t,
+      m' <- match r b st t']
 
 data SubText = FirstLetters |
              LastLetters |
@@ -155,10 +169,13 @@ subtextInd ind
           | removeEndsInd ind'   = Just RemoveEnds
           | otherwise = Nothing
 
-gatherLetters :: ParseTree -> [String]
-gatherLetters (Text ct) = [filter (not . isSpace) (concat ct)]
-gatherLetters (Abbreviation ct) = abbreviations $ filter (not . isSpace) (concat ct)
-gatherLetters (Charade ws ind t t') = [l ++ r | l <- gatherLetters t, r <- gatherLetters t']
+gatherLetters :: ParseTree -> ([String], AnswerTree)
+gatherLetters (Text ct) = ([filter (not . isSpace) (concat ct)], Text' (unwords ct))
+gatherLetters (Abbreviation ct) = (abbreviations $ filter (not . isSpace) (concat ct), Abbreviation' (unwords ct))
+gatherLetters (Charade ws ind t t')
+  = (l ++ r, Charade' (unwords ws) at at')
+  where (l, at)  = gatherLetters t
+        (r, at') = gatherLetters t'
 gatherLetters _ = error "Shouldn't be here"
 
 earlyFinishMap f []
@@ -167,36 +184,37 @@ earlyFinishMap f (x : xs)
   = if (not . null) d then d else earlyFinishMap f xs
   where d = f x
 
-getAllParses :: Clue -> [ParseTree]
-getAllParses c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = P.allParses c
+getAllParses :: Clue -> (SynonymTable, [ParseTree])
+getAllParses c = (st, map (\(_,_,_,t) -> t) ps)
+  where (ps, st) = P.allParses c
 
-getMostParses :: Clue -> [ParseTree]
-getMostParses c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = P.parsesWithoutSynonymLengths Always c
+getMostParses :: Clue -> (SynonymTable, [ParseTree])
+getMostParses c = (st, map (\(_,_,_,t) -> t) ps)
+  where (ps, st) = P.parsesWithoutSynonymLengths Always c
 
-getSomeParses :: Clue -> [ParseTree]
-getSomeParses c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = P.parses Always c
+getSomeParses :: Clue -> (SynonymTable, [ParseTree])
+getSomeParses c = (st, map (\(_,_,_,t) -> t) ps)
+  where (ps, st) = P.parses Always c
 
-getSomeParsesOld :: Clue -> [ParseTree]
-getSomeParsesOld c = map (\(_,_,_,t) -> t) ps
-  where (ps, _) = OldP.parses Always c
+getSomeParsesOld :: Clue -> (SynonymTable, [ParseTree])
+getSomeParsesOld c = (st, map (\(_,_,_,t) -> t) ps)
+  where (ps, st) = OldP.parses Always c
 
 testClue :: Clue -> String -> Bool -> Either [[(String, String)]] [AnswerTree]
 testClue clue ans b
   = if b then Left (listSynonymsToGet work) else Right work
   where lans = map toLower ans
-        work = earlyFinishMap (match lans b) $ getMostParses clue
+        (st, ps) = getMostParses clue
+        work = earlyFinishMap (match lans b st) (take 1000 ps)
 
-results = [(clue, answer, concatMap (match answer False) ps) |
+results = [(clue, answer, concatMap (match answer False st) ps) |
   (clue, upAnswer) <- everyman,
   let answer = map toLower upAnswer,
-  let ps = getSomeParses clue]
+  let (st, ps) = getSomeParses clue]
 
-otherResults = [if null res then concatMap (match answer True) ps else [] |
+otherResults = [if null res then concatMap (match answer True st) ps else [] |
   (clue, answer, res) <- results,
-  let ps = getMostParses clue]
+  let (st, ps) = getMostParses clue]
 
 listSynonymsToGet :: [AnswerTree] -> [[(String, String)]]
 listSynonymsToGet ats
@@ -216,11 +234,11 @@ countNeededSynonyms (Insertion' _ at at')
   where
     (l, r)   = countNeededSynonyms at
     (l', r') = countNeededSynonyms at'
-countNeededSynonyms (Subtraction' _ at at')
-  = (l + l', r ++ r')
-  where
-    (l, r)   = countNeededSynonyms at
-    (l', r') = countNeededSynonyms at'
+-- countNeededSynonyms (Subtraction' _ at at')
+--   = (l + l', r ++ r')
+--   where
+--     (l, r)   = countNeededSynonyms at
+--     (l', r') = countNeededSynonyms at'
 countNeededSynonyms (Charade' _ at at')
   = (l + l', r ++ r')
   where

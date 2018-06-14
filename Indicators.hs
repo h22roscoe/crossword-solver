@@ -2331,7 +2331,17 @@ reversalIndicatorsL
      "about",
      "turn",
      "turns",
-     "turned"]
+     "turned",
+     "east",
+     "west",
+     "north",
+     "left",
+     "right",
+     "from the bottom",
+     "from the south",
+     "up",
+     "uprising",
+     "upwardly mobile"]
 
 reversalIndicatorsR
   = ["riser"]
