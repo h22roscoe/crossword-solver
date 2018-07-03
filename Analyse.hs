@@ -10,7 +10,7 @@ import Benchmarks.ClueBank
 newResults = [earlyFinishMap (match answer False st) ps' | -- Exploit laziness and dont go beyond first solve
   (clue, upAnswer) <- cluebank,--halfbenchmark,
   let answer = map toLower upAnswer,
-  let (st, ps) = getSomeParses clue,
+  let (st, ps) = getAllParses clue,
   let ps' = take 1000 ps]
 
 oldResults = [earlyFinishMap (match answer False st) ps' | -- Exploit laziness and dont go beyond first solve

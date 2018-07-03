@@ -15,7 +15,8 @@ allIndicators = [
   {- reversalIndicators ++ -} reversalInd1 ++ reversalInd2,
   {- insertionIndicators ++ -} insertionInd1 ++ insertionInd2C1 ++ insertionInd2R1 ++ insertionInd2L1 ++ insertionInd2C2 ++ insertionInd2R2 ++ insertionInd2L2,
   {- subtractionIndicators ++ -} subtractionInd1 ++ subtractionInd2C1 ++ subtractionInd2R1 ++ subtractionInd2L1 ++ subtractionInd2C2 ++ subtractionInd2R2 ++ subtractionInd2L2,
-  {- charadeIndicators ++ -} charadeInd1 ++ charadeInd2C1 ++ charadeInd2R1 ++ charadeInd2L1 ++ charadeInd2C2 ++ charadeInd2R2 ++ charadeInd2L2]
+  {- charadeIndicators ++ -} charadeInd1 ++ charadeInd2C1 ++ charadeInd2R1 ++ charadeInd2L1 ++ charadeInd2C2 ++ charadeInd2R2 ++ charadeInd2L2,
+  defInd1 ++ defInd2]
 
 main = writeFile "./data/indicators.csv" $ genCsvFile allIndicators
 

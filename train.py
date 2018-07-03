@@ -144,21 +144,21 @@ for type in indicators:
 
 inputs, labels, ws = get_data(train_inds)
 
-# model = Sequential()
-# model.add(Dense(128, activation = 'tanh', input_dim = 300))
-# model.add(Dense(64, activation = 'tanh'))
-# model.add(Dense(13, activation = 'softmax'))
-# model.compile(optimizer = 'rmsprop',
-#               loss = 'categorical_crossentropy',
-#               metrics = ['accuracy'])
+model = Sequential()
+model.add(Dense(128, activation = 'tanh', input_dim = 300))
+model.add(Dense(64, activation = 'tanh'))
+model.add(Dense(14, activation = 'softmax'))
+model.compile(optimizer = 'rmsprop',
+              loss = 'categorical_crossentropy',
+              metrics = ['accuracy'])
 
-model = load_model('./data/weights.0.14.h5')
+# model = load_model('./data/weights.0.14.h5')
 
-# cb = keras.callbacks.ModelCheckpoint('./data/weights.{loss:.2f}.h5', monitor = 'loss', save_best_only = True)
+cb = keras.callbacks.ModelCheckpoint('./data/weights.{loss:.2f}.h5', monitor = 'loss', save_best_only = True)
 
 model.summary()
 
-# model.fit_generator(SampleEachSequence(inputs, labels, ws), epochs = 1, callbacks = [cb])
+model.fit_generator(SampleEachSequence(inputs, labels, ws), epochs = 1, callbacks = [cb])
 
 test_inputs, test_labels, test_ws = get_data(test_inds)
 

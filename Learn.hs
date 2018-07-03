@@ -66,9 +66,10 @@ match s b st (Synonym s')
         syncond   = elem s (index' (length s) (fromMaybe (error s) (lookup s' st)))
         othercond = b && isInWordlist s
 match s b st (Anagram ws ind t)
-  | any (sameLetters s) letters = [Anagram' s at]
+  | any (anags s) letters = [Anagram' s at]
   | otherwise                   = []
   where (letters, at) = gatherLetters t
+        anags s ls    = sameLetters s ls && s /= ls
 match s b st (Odds ws ind op)
   | s == odds letters = [Odds' s]
   | otherwise         = []
@@ -80,9 +81,8 @@ match s b st (Evens ws ind op)
 match s b st (ExampleOf ws ind op)
   = match s b st (Synonym op) -- TODO check this
 match s b st (HiddenWord ws ind op)
-  | elem s (substrings letters) = [HiddenWord' s]
-  | otherwise                   = []
-  where letters = filter (not . isSpace) (concat op)
+  = [HiddenWord' s | l <- suffixes left, r <- prefixes right, s == (l ++ concat m ++ r)]
+  where (left, m, right) = extractMiddle ws
 match s b st (ReversedHiddenWord ws ws' ind ind' op)
   | (not . null) recurse = [ReversedHiddenWord' s]
   | otherwise            = []
@@ -95,23 +95,23 @@ match s b st (SubText ws ind (Text txt))
     matchSubtext s b RemoveEnds txt
   where
     matchSubtext str bool FirstLetters text
-      | elem str things = [SubText' FirstLetters str (Text' str)]
+      | elem str things = [SubText' FirstLetters str (Text' (unwords text))]
       | otherwise       = []
       where things = map concat $ transpose (map firstLetters rightLenTxt)
             shortestLen = minimum (map length text)
             rightLenTxt = map (take shortestLen) text
     matchSubtext str bool LastLetters text
-      | elem str things = [SubText' LastLetters str (Text' str)]
+      | elem str things = [SubText' LastLetters str (Text' (unwords text))]
       | otherwise       = []
       where things = map concat $ transpose (map lastLetters rightLenTxt)
             shortestLen = minimum (map length text)
             rightLenTxt = map (\n -> drop ((length n) - shortestLen - 1) n) text
     matchSubtext str bool RemoveMiddle text
-      | elem str things = [SubText' RemoveMiddle str (Text' str)]
+      | elem str things = [SubText' RemoveMiddle str (Text' (unwords text))]
       | otherwise       = []
       where things = concatMap removeMiddle text
     matchSubtext str bool RemoveEnds text
-      | elem str things = [SubText' RemoveEnds str (Text' str)]
+      | elem str things = [SubText' RemoveEnds str (Text' (unwords text))]
       | otherwise       = []
       where things = concatMap removeEnds text
 match s b st (SubText ws ind t)
@@ -153,29 +153,13 @@ data SubText = FirstLetters |
              RemoveEnds
              deriving (Eq, Ord, Show)
 
-subtextInd :: ClueText -> Maybe SubText
-subtextInd ind
-  = subtextInd' 0 ind
-  where subtextInd' 0 ind'
-          | firstLettersInd ind' = Just FirstLetters
-          | lastLettersInd ind'  = Just LastLetters
-          | removeMiddleInd ind' = Just RemoveMiddle
-          | removeEndsInd ind'   = Just RemoveEnds
-          | otherwise = subtextInd' 1 (map Stemmer.stem ind')
-        subtextInd' 1 ind'
-          | firstLettersInd ind' = Just FirstLetters
-          | lastLettersInd ind'  = Just LastLetters
-          | removeMiddleInd ind' = Just RemoveMiddle
-          | removeEndsInd ind'   = Just RemoveEnds
-          | otherwise = Nothing
-
 gatherLetters :: ParseTree -> ([String], AnswerTree)
 gatherLetters (Text ct) = ([filter (not . isSpace) (concat ct)], Text' (unwords ct))
 gatherLetters (Abbreviation ct) = (abbreviations $ filter (not . isSpace) (concat ct), Abbreviation' (unwords ct))
 gatherLetters (Charade ws ind t t')
-  = (l ++ r, Charade' (unwords ws) at at')
-  where (l, at)  = gatherLetters t
-        (r, at') = gatherLetters t'
+  = ([l ++ r | l <- left, r <- right], Charade' (unwords ws) at at')
+  where (left, at)   = gatherLetters t
+        (right, at') = gatherLetters t'
 gatherLetters _ = error "Shouldn't be here"
 
 earlyFinishMap f []

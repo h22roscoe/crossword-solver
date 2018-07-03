@@ -33,21 +33,56 @@ solve c
   where
     (ps, table) = parses Always c
 
+solve' c
+  = displayOneSol c (Just [a | a@(sol, (_, def, _, _), _) <- evaluate table ps, elem sol (lookUp def defs)])
+  where
+    (ps, table) = parses None c
+    defs = getUniqueDefs c
+
 backSolve c
-  = [concat [L.match ans False st t | ans <- lookUp def defs] | (_, def, ind, t) <- ps']
+  = [concat [L.match ans False st t | ans <- lookUp def defs] | (_, def, ind, t) <- ps]
   where
     (ps, st) = parses None c
-    ps' = take 1000 ps
+    defs = getUniqueDefs c
+
+backSolveHint c hint
+  =  [concat [L.match ans False st t | ans <- lookUp def defs] | (_, def, ind, t) <- ps]
+  where
+    (ps, st) = parses None c
+    defs = getUniqueDefsHint c hint
+
+backSolve' c
+  = [filter (\(_, _, _, l) -> (not.null) l) [(i, def, t, L.match ans False st t) | ans <- lookUp def defs] | (i, (_, def, ind, t)) <- zip [0..] ps]
+  where
+    (ps, st) = parses None c
     defs = getUniqueDefs c
 
 getUniqueDefs c
   = [(d, filter ((== l) . length) (syns d)) | d <- defs]
   where
-    syns d     = synonyms (unwords d) ++ query [MeansLike d]
+    syns d     = synonyms (unwords d)
     ct         = words $ cleanUp (fst c)
     l          = snd c
     defs       = nub [def | def <- substrings ct, end def ct, length def < 4]
     end def ct = isSuffixOf def ct || isPrefixOf def ct
+
+getUniqueDefsHint c hint
+  = [(d, filter hintFilter (filter ((== l) . length) (syns d))) | d <- defs]
+  where
+    hintFilter = createFilter hint
+    syns d     = synonyms (unwords d)
+    ct         = words $ cleanUp (fst c)
+    l          = snd c
+    defs       = nub [def | def <- substrings ct, end def ct, length def < 4]
+    end def ct = isSuffixOf def ct || isPrefixOf def ct
+
+createFilter :: String -> String -> Bool
+createFilter [] []
+  = True
+createFilter ('*':cs) (_:ls)
+  = createFilter cs ls
+createFilter (c:cs) (l:ls)
+  = if toLower c == l then createFilter cs ls else False
 
 solveAll c
   = displayAllSols c (filterSols table True (evaluate table ps) Nothing)
